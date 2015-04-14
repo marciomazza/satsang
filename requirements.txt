@@ -1,0 +1,6 @@
+pydub
+SpeechRecognition
+tinydb
+
+# dev
+ipdb
