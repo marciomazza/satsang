@@ -5,9 +5,9 @@ from speech_recognition import WavFile, Recognizer
 from pydub.silence import detect_silence
 
 en, pt = 'en-US', 'pt-BR'
-BASE_SILENCE_THRESH = -50  # in dB
 BASE_MIN_SILENCE_LEN = 300  # in ms
-
+BASE_SILENCE_THRESH = -50  # in dB
+SILENCE_MARGIN = 100  # in ms
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
@@ -34,13 +34,18 @@ class SpeechSegment(object):
         self.splits = {}
         self._recognized = None
 
-    def split(self, min_silence_len=BASE_MIN_SILENCE_LEN, silence_thresh=BASE_MIN_SILENCE_LEN):
+    def split(self, min_silence_len=BASE_MIN_SILENCE_LEN, silence_thresh=BASE_SILENCE_THRESH):
         if (min_silence_len, silence_thresh) in self.splits:
             return
         split_ranges = self.split_ranges(min_silence_len, silence_thresh)
-        self.splits[(min_silence_len, silence_thresh)] = [
-            SpeechSegment(self.audio_segment[start, end], speech_start - start)
-            for (start, speech_start, end) in split_ranges]
+
+        def sub_segment((start, speech_start, end)):
+            speech_start = max(0, speech_start - SILENCE_MARGIN)
+            start = min(start, speech_start)
+            end = end + SILENCE_MARGIN
+            return SpeechSegment(self.audio_segment[start:end], speech_start - start)
+
+        self.splits[(min_silence_len, silence_thresh)] = map(sub_segment, split_ranges)
 
     def split_ranges(self, min_silence_len, silence_thresh):
         """
