@@ -5,6 +5,7 @@ from pydub import AudioSegment
 from pydub.playback import play
 from pydub.silence import detect_silence
 from speech_recognition import WavFile, Recognizer
+from tinydb import TinyDB
 
 
 en, pt = 'en-US', 'pt-BR'
@@ -82,7 +83,11 @@ class SpeechSegment(NodeMixin):
             ranges.append((prev_start_i, prev_end_i, start_i))
             prev_start_i, prev_end_i = start_i, end_i
 
-        if end_i != len_seg:
+        if end_i == len_seg:
+            # if we have silence at the end, just join it to the last range
+            s, ss, _ = ranges[-1]
+            ranges[-1] = (s, ss, end_i)
+        else:
             ranges.append((prev_start_i, prev_end_i, len_seg))
 
         if ranges[0] == (0, 0, 0):
@@ -124,6 +129,37 @@ class SpeechSegment(NodeMixin):
     # @property
     # def language(self):
     #     return self.recognized[en]
+
+    def _data_to_store(self):
+        return dict(
+            speech_start=self.speech_start,
+            _recognized=self._recognized,
+            children=[(child._data_to_store(), len(child.audio_segment))
+                      for child in self.children],
+        )
+
+    def _restore_from_data(self, data):
+        self.speech_start = data['speech_start']
+        self._recognized = data['_recognized']
+
+        self.children = []
+        start = 0
+        for (child_data, audio_length) in data['children']:
+            end = start + audio_length
+            child = SpeechSegment(self.audio_segment[start:end])
+            child._restore_from_data(child_data)
+            self.children.append(child)
+            start = end
+
+    def save(self, db_path):
+        db = TinyDB(db_path)
+        db.purge()
+        db.insert({'root': self._data_to_store()})
+
+    def restore(self, db_path):
+        db = TinyDB(db_path)
+        data = db.all()[0]['root']
+        self._restore_from_data(data)
 
 
 def speech_from_wav(filename, split=True):
