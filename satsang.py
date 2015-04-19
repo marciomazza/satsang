@@ -36,19 +36,15 @@ class SpeechSegment(NodeMixin):
         super(SpeechSegment, self).__init__()
         self.audio_segment = audio_segment
         self.speech_start = speech_start
-        self._splits = {}
         self._recognized = None
 
     def split(self, silence_min_len=DEFAULT_SILENCE_MIN_LEN,
               silence_max_db=DEFAULT_SILENCE_MAX_DB,
               silence_margin=DEFAULT_SILENCE_MARGIN):
-        if (silence_min_len, silence_max_db) in self._splits:
-            return
         split_ranges = self.split_ranges(silence_min_len, silence_max_db, silence_margin)
         self.children = [
             SpeechSegment(self.audio_segment[start:end], speech_start - start)
             for (start, speech_start, end) in split_ranges]
-        self._splits[(silence_min_len, silence_max_db, silence_margin)] = self.children
 
     def split_ranges(self, silence_min_len, silence_max_db, silence_margin):
         """
