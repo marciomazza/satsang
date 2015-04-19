@@ -7,7 +7,7 @@ from pydub.silence import detect_silence
 en, pt = 'en-US', 'pt-BR'
 DEFAULT_MIN_SILENCE_LEN = 300  # in ms
 DEFAULT_SILENCE_MAX_DB = -50  # in dB
-DEFAULT_SILENCE_MARGIN = 100  # in ms
+DEFAULT_SILENCE_MARGIN = 50  # in ms
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
@@ -40,19 +40,18 @@ class SpeechSegment(object):
         if (min_silence_len, silence_max_db) in self.splits:
             return
         split_ranges = self.split_ranges(min_silence_len, silence_max_db, silence_margin)
-
-        def sub_segment((start, speech_start, end)):
-            speech_start = max(0, speech_start - silence_margin)
-            start = min(start, speech_start)
-            end = end + silence_margin
-            return SpeechSegment(self.audio_segment[start:end], speech_start - start)
-
-        self.splits[(min_silence_len, silence_max_db)] = map(sub_segment, split_ranges)
+        segments = [
+            SpeechSegment(self.audio_segment[start:end], speech_start - start)
+            for (start, speech_start, end) in split_ranges]
+        self.splits[(min_silence_len, silence_max_db, silence_margin)] = segments
 
     def split_ranges(self, min_silence_len, silence_max_db, silence_margin):
         """
         Based on see pydub.silence.detect_nonsilent
         """
+        assert 2*silence_margin < min_silence_len, 'Margin (%s) is too big for min_silence_len (%s)' % (
+            silence_margin, min_silence_len)
+
         silent_ranges = detect_silence(self.audio_segment, min_silence_len, silence_max_db)
         len_seg = len(self.audio_segment)
 
@@ -61,8 +60,16 @@ class SpeechSegment(object):
             return [(0, 0, len_seg)]
 
         # short circuit when the whole audio segment is silent
-        if silent_ranges[0][0] == 0 and silent_ranges[0][1] == len_seg:
+        if silent_ranges[0] == [0, len_seg]:
             return []
+
+        # reduce silent ranges by margin at both ends,
+        #  but not when they touch the edges of the segment
+        def give_margin((start, end)):
+            return [
+                start + silence_margin if start > 0 else start,
+                end - silence_margin if end < len_seg else end]
+        silent_ranges = map(give_margin, silent_ranges)
 
         prev_start_i = 0
         prev_end_i = 0
