@@ -111,11 +111,15 @@ class SpeechSegment(NodeMixin):
             }
         return self._recognized
 
-    # def confidence(self):
-    #     if not alternatives:
-    #         return -1
-    #     else:
-    #         return max(a['confidence'] for a in alternatives)
+    def confidence(self):
+
+        def max_confidence(alternatives):
+            if not alternatives:
+                return -1
+            else:
+                return max(a['confidence'] for a in alternatives)
+
+        return {lang: max_confidence(alternatives) for lang, alternatives in self.recognized.iteritems()}
 
     # @property
     # def language(self):
