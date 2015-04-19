@@ -14,22 +14,6 @@ DEFAULT_SILENCE_MAX_DB = -50  # in dB
 DEFAULT_SILENCE_MARGIN = 50  # in ms
 
 
-def recognize_wav(filename, language="en-US", show_all=True):
-    recognizer = Recognizer(language=language)
-    with WavFile(filename) as source:
-        audio_data = recognizer.record(source)
-    return recognizer.recognize(audio_data, show_all)
-
-
-def recognize_audio_segment(audio_segment, language="en-US", show_all=True):
-    with NamedTemporaryFile("w+b", suffix=".wav") as f:
-        audio_segment.export(f.name, "wav")
-        try:
-            return recognize_wav(f.name, language, show_all)
-        except LookupError:
-            return None
-
-
 class SpeechSegment(NodeMixin):
 
     def __init__(self, audio_segment, speech_start=0):
@@ -66,25 +50,26 @@ class SpeechSegment(NodeMixin):
 
         # reduce silent ranges by margin at both ends,
         #  but not when they touch the edges of the segment
-        def give_margin((start, end)):
+        def cut_margin((start, end)):
             return [
                 start + silence_margin if start > 0 else start,
                 end - silence_margin if end < len_seg else end]
-        silent_ranges = map(give_margin, silent_ranges)
 
-        prev_start_i = 0
-        prev_end_i = 0
+        silent_ranges = map(cut_margin, silent_ranges)
+
+        prev_start = 0
+        prev_end = 0
         ranges = []
-        for start_i, end_i in silent_ranges:
-            ranges.append((prev_start_i, prev_end_i, start_i))
-            prev_start_i, prev_end_i = start_i, end_i
+        for start, end in silent_ranges:
+            ranges.append((prev_start, prev_end, start))
+            prev_start, prev_end = start, end
 
-        if end_i == len_seg:
+        if end == len_seg:
             # if we have silence at the end, just join it to the last range
             s, ss, _ = ranges[-1]
-            ranges[-1] = (s, ss, end_i)
+            ranges[-1] = (s, ss, end)
         else:
-            ranges.append((prev_start_i, prev_end_i, len_seg))
+            ranges.append((prev_start, prev_end, len_seg))
 
         if ranges[0] == (0, 0, 0):
             ranges.pop(0)
@@ -156,6 +141,22 @@ class SpeechSegment(NodeMixin):
         db = TinyDB(db_path)
         data = db.all()[0]['root']
         self._restore_from_data(data)
+
+
+def recognize_wav(filename, language="en-US", show_all=True):
+    recognizer = Recognizer(language=language)
+    with WavFile(filename) as source:
+        audio_data = recognizer.record(source)
+    return recognizer.recognize(audio_data, show_all)
+
+
+def recognize_audio_segment(audio_segment, language="en-US", show_all=True):
+    with NamedTemporaryFile("w+b", suffix=".wav") as f:
+        audio_segment.export(f.name, "wav")
+        try:
+            return recognize_wav(f.name, language, show_all)
+        except LookupError:
+            return None
 
 
 def speech_from_wav(filename, split=True):
