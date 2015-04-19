@@ -99,6 +99,7 @@ class SpeechSegment(NodeMixin):
 
     def play_children(self, skip_silence=True):
         for child in self.children:
+            print '\n' + '~' * 40, child.audio_segment.duration_seconds
             child.play(skip_silence)
 
     @property
