@@ -5,9 +5,9 @@ from speech_recognition import WavFile, Recognizer
 from pydub.silence import detect_silence
 
 en, pt = 'en-US', 'pt-BR'
-BASE_MIN_SILENCE_LEN = 300  # in ms
-BASE_SILENCE_THRESH = -50  # in dB
-SILENCE_MARGIN = 100  # in ms
+DEFAULT_MIN_SILENCE_LEN = 300  # in ms
+DEFAULT_SILENCE_MAX_DB = -50  # in dB
+DEFAULT_SILENCE_MARGIN = 100  # in ms
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
@@ -34,24 +34,26 @@ class SpeechSegment(object):
         self.splits = {}
         self._recognized = None
 
-    def split(self, min_silence_len=BASE_MIN_SILENCE_LEN, silence_thresh=BASE_SILENCE_THRESH):
-        if (min_silence_len, silence_thresh) in self.splits:
+    def split(self, min_silence_len=DEFAULT_MIN_SILENCE_LEN,
+              silence_max_db=DEFAULT_SILENCE_MAX_DB,
+              silence_margin=DEFAULT_SILENCE_MARGIN):
+        if (min_silence_len, silence_max_db) in self.splits:
             return
-        split_ranges = self.split_ranges(min_silence_len, silence_thresh)
+        split_ranges = self.split_ranges(min_silence_len, silence_max_db, silence_margin)
 
         def sub_segment((start, speech_start, end)):
-            speech_start = max(0, speech_start - SILENCE_MARGIN)
+            speech_start = max(0, speech_start - silence_margin)
             start = min(start, speech_start)
-            end = end + SILENCE_MARGIN
+            end = end + silence_margin
             return SpeechSegment(self.audio_segment[start:end], speech_start - start)
 
-        self.splits[(min_silence_len, silence_thresh)] = map(sub_segment, split_ranges)
+        self.splits[(min_silence_len, silence_max_db)] = map(sub_segment, split_ranges)
 
-    def split_ranges(self, min_silence_len, silence_thresh):
+    def split_ranges(self, min_silence_len, silence_max_db, silence_margin):
         """
         Based on see pydub.silence.detect_nonsilent
         """
-        silent_ranges = detect_silence(self.audio_segment, min_silence_len, silence_thresh)
+        silent_ranges = detect_silence(self.audio_segment, min_silence_len, silence_max_db)
         len_seg = len(self.audio_segment)
 
         # if there is no silence, the whole thing is nonsilent

@@ -20,4 +20,4 @@ def test_split_ranges(silent_ranges, expected):
         stub.return_value = silent_ranges
 
         seg = SpeechSegment(range(10))
-        assert seg.split_ranges(None, None) == expected
+        assert seg.split_ranges(None, None, None) == expected
