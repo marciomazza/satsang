@@ -1,11 +1,13 @@
-from pydub.playback import play
 from tempfile import NamedTemporaryFile
 
-from speech_recognition import WavFile, Recognizer
+from pydub import AudioSegment
+from pydub.playback import play
 from pydub.silence import detect_silence
+from speech_recognition import WavFile, Recognizer
+
 
 en, pt = 'en-US', 'pt-BR'
-DEFAULT_MIN_SILENCE_LEN = 300  # in ms
+DEFAULT_SILENCE_MIN_LEN = 300  # in ms
 DEFAULT_SILENCE_MAX_DB = -50  # in dB
 DEFAULT_SILENCE_MARGIN = 50  # in ms
 
@@ -31,28 +33,30 @@ class SpeechSegment(object):
         self.audio_segment = audio_segment
         self.speech_start = speech_start
 
-        self.splits = {}
+        self.children = []
+        self._splits = {}
         self._recognized = None
 
-    def split(self, min_silence_len=DEFAULT_MIN_SILENCE_LEN,
+    def do_split(self, silence_min_len=DEFAULT_SILENCE_MIN_LEN,
               silence_max_db=DEFAULT_SILENCE_MAX_DB,
               silence_margin=DEFAULT_SILENCE_MARGIN):
-        if (min_silence_len, silence_max_db) in self.splits:
+        if (silence_min_len, silence_max_db) in self._splits:
             return
-        split_ranges = self.split_ranges(min_silence_len, silence_max_db, silence_margin)
+        split_ranges = self.split_ranges(silence_min_len, silence_max_db, silence_margin)
         segments = [
             SpeechSegment(self.audio_segment[start:end], speech_start - start)
             for (start, speech_start, end) in split_ranges]
-        self.splits[(min_silence_len, silence_max_db, silence_margin)] = segments
+        self.children = segments
+        self._splits[(silence_min_len, silence_max_db, silence_margin)] = segments
 
-    def split_ranges(self, min_silence_len, silence_max_db, silence_margin):
+    def split_ranges(self, silence_min_len, silence_max_db, silence_margin):
         """
         Based on see pydub.silence.detect_nonsilent
         """
-        assert 2*silence_margin < min_silence_len, 'Margin (%s) is too big for min_silence_len (%s)' % (
-            silence_margin, min_silence_len)
+        assert 2*silence_margin < silence_min_len, 'Margin (%s) is too big for silence_min_len (%s)' % (
+            silence_margin, silence_min_len)
 
-        silent_ranges = detect_silence(self.audio_segment, min_silence_len, silence_max_db)
+        silent_ranges = detect_silence(self.audio_segment, silence_min_len, silence_max_db)
         len_seg = len(self.audio_segment)
 
         # if there is no silence, the whole thing is nonsilent
@@ -86,12 +90,16 @@ class SpeechSegment(object):
 
         return ranges
 
-    def play(self, skip_silence=True, margin=100):
+    def play(self, skip_silence=True):
         if skip_silence:
             seg = self.audio_segment[self.speech_start:]
         else:
             seg = self.audio_segment
         play(seg)
+
+    def play_split(self, skip_silence=True):
+        for child in self.children:
+            child.play(skip_silence)
 
     @property
     def recognized(self):
@@ -113,3 +121,7 @@ class SpeechSegment(object):
     # def language(self):
     #     return self.recognized[en]
 
+
+def speech_from_wav(filename):
+    audio_segment = AudioSegment.from_wav(filename)
+    return SpeechSegment(audio_segment)
