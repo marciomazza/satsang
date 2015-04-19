@@ -70,6 +70,7 @@ def test_split(silent_ranges, splits, should_split):
 def assert_equal_speech_data(r1, r2):
     assert r1.speech_start == r2.speech_start
     assert r1._recognized == r2._recognized
+    assert r1.silence_max_db_used == r2.silence_max_db_used
     assert_equal_sequences(r1.audio_segment, r2.audio_segment)
 
     assert len(r1.children) == len(r2.children)

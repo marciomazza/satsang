@@ -14,6 +14,8 @@ DEFAULT_SILENCE_MIN_LEN = 300  # in ms
 DEFAULT_SILENCE_MAX_DB = -50  # in dB
 DEFAULT_SILENCE_MARGIN = 50  # in ms
 
+SILENCE_SEEK_COUNT = 30
+
 CONFIDENCE_MIN = 0.40
 CONFIDENCE_MAX = 0.85
 
@@ -25,12 +27,19 @@ class SpeechSegment(NodeMixin):
         self.audio_segment = audio_segment
         self.speech_start = speech_start
         self._recognized = None
+        self.silence_max_db_used = None
 
     def split(self,
             silence_min_len=DEFAULT_SILENCE_MIN_LEN,
             silence_max_db=DEFAULT_SILENCE_MAX_DB,
             silence_margin=DEFAULT_SILENCE_MARGIN):
+
+        self.silence_max_db_used = silence_max_db
+        self.children = []
+
         split_ranges = self.split_ranges(silence_min_len, silence_max_db, silence_margin)
+        if not split_ranges:
+            return
         if len(split_ranges) == 1:
             # just update speech_start
             [(_, self.speech_start, _)] = split_ranges
@@ -127,10 +136,24 @@ class SpeechSegment(NodeMixin):
         if min_value < confidence_min and max_value > confidence_max:
             return lang
 
+    def seek_split(self, initial_silence_max_db=DEFAULT_SILENCE_MAX_DB):
+        if self.children:
+            return
+        message("Seeking split dB for segment...")
+        for db in range(initial_silence_max_db, initial_silence_max_db + SILENCE_SEEK_COUNT):
+            message("  Trying %d dB" % db)
+            self.split(silence_max_db=db)
+            if self.children:
+                message('    >>> split done in %d dB' % db)
+                break
+
+    # SAVE AND RESTORE ##########################
+
     def _data_to_store(self):
         return dict(
             speech_start=self.speech_start,
             _recognized=self._recognized,
+            silence_max_db_used=self.silence_max_db_used,
             children=[(child._data_to_store(), len(child.audio_segment))
                       for child in self.children],
         )
@@ -138,6 +161,7 @@ class SpeechSegment(NodeMixin):
     def _restore_from_data(self, data):
         self.speech_start = data['speech_start']
         self._recognized = data['_recognized']
+        self.silence_max_db_used = data['silence_max_db_used']
 
         self.children = []
         start = 0
@@ -184,3 +208,7 @@ def speech_from_wav(filename, split=True):
     elif split:
         speech.split()
     return speech
+
+
+def message(msg):
+    print msg
