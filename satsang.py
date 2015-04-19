@@ -122,6 +122,9 @@ class SpeechSegment(NodeMixin):
     #     return self.recognized[en]
 
 
-def speech_from_wav(filename):
+def speech_from_wav(filename, split=True):
     audio_segment = AudioSegment.from_wav(filename)
-    return SpeechSegment(audio_segment)
+    speech = SpeechSegment(audio_segment)
+    if split:
+        speech.split()
+    return speech
