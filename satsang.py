@@ -26,15 +26,23 @@ class SpeechSegment(NodeMixin):
         self.speech_start = speech_start
         self._recognized = None
 
-    def split(self, silence_min_len=DEFAULT_SILENCE_MIN_LEN,
-              silence_max_db=DEFAULT_SILENCE_MAX_DB,
-              silence_margin=DEFAULT_SILENCE_MARGIN):
+    def split(self,
+            silence_min_len=DEFAULT_SILENCE_MIN_LEN,
+            silence_max_db=DEFAULT_SILENCE_MAX_DB,
+            silence_margin=DEFAULT_SILENCE_MARGIN):
         split_ranges = self.split_ranges(silence_min_len, silence_max_db, silence_margin)
-        self.children = [
-            SpeechSegment(self.audio_segment[start:end], speech_start - start)
-            for (start, speech_start, end) in split_ranges]
+        if len(split_ranges) == 1:
+            # just update speech_start
+            [(_, self.speech_start, _)] = split_ranges
+        else:
+            self.children = [
+                SpeechSegment(self.audio_segment[start:end], speech_start - start)
+                for (start, speech_start, end) in split_ranges]
 
-    def split_ranges(self, silence_min_len, silence_max_db, silence_margin):
+    def split_ranges(self,
+            silence_min_len=DEFAULT_SILENCE_MIN_LEN,
+            silence_max_db=DEFAULT_SILENCE_MAX_DB,
+            silence_margin=DEFAULT_SILENCE_MARGIN):
         """
         Based on see pydub.silence.detect_nonsilent
         """
