@@ -1,3 +1,4 @@
+import os.path
 from tempfile import NamedTemporaryFile
 
 from leaves import NodeMixin
@@ -162,6 +163,9 @@ def recognize_audio_segment(audio_segment, language="en-US", show_all=True):
 def speech_from_wav(filename, split=True):
     audio_segment = AudioSegment.from_wav(filename)
     speech = SpeechSegment(audio_segment)
-    if split:
+    db_path = 'db/%s.db.json' % os.path.splitext(filename)[0]
+    if os.path.isfile(db_path):
+        speech.restore(db_path)
+    elif split:
         speech.split()
     return speech
