@@ -22,6 +22,10 @@ def test_split_ranges(silent_ranges, expected):
         seg = SpeechSegment(range(100))
         assert seg.split_ranges(10, None, 2) == expected
 
+        children_audio_chain = (x for child in seg.children
+            for x in child.audio_segment)
+        assert all(x == y for x, y in zip(seg.audio_segment, children_audio_chain))
+
 
 def test_margin_too_big():
     seg = SpeechSegment(range(100))
