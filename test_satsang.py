@@ -6,10 +6,10 @@ from satsang import SpeechSegment
 
 @pytest.mark.parametrize('silent_ranges, expected', [
     [[(20, 40), (70, 80)],
-     [(0, 0, 20+2), (20+2, 40-2, 70+2), (70+2, 80-2, 100)]],
+     [(0, 0, 20 + 2), (20 + 2, 40 - 2, 70 + 2), (70 + 2, 80 - 2, 100)]],
 
     [[(0, 30), (70, 100)],
-     [(0, 30-2, 70+2)]],
+     [(0, 30 - 2, 70 + 2)]],
 
     [[(0, 100)], []],
 
@@ -22,11 +22,11 @@ def test_split_ranges(silent_ranges, expected):
         seg = SpeechSegment(range(100))
         assert seg.split_ranges(10, None, 2) == expected
 
-        seg.do_split(silence_margin=2)
+        seg.split(silence_margin=2)
         assert [s.speech_start for s in seg.children] == [ss - s for s, ss, e in expected]
 
         children_audio_chain = (x for child in seg.children
-            for x in child.audio_segment)
+                                for x in child.audio_segment)
         assert all(x == y for x, y in zip(seg.audio_segment, children_audio_chain))
 
 

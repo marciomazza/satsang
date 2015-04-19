@@ -1,6 +1,8 @@
 pydub
 SpeechRecognition
 tinydb
+leaves
 
 # dev
 ipdb
+pytest-cov

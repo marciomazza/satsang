@@ -1,5 +1,6 @@
 from tempfile import NamedTemporaryFile
 
+from leaves import NodeMixin
 from pydub import AudioSegment
 from pydub.playback import play
 from pydub.silence import detect_silence
@@ -10,6 +11,7 @@ en, pt = 'en-US', 'pt-BR'
 DEFAULT_SILENCE_MIN_LEN = 300  # in ms
 DEFAULT_SILENCE_MAX_DB = -50  # in dB
 DEFAULT_SILENCE_MARGIN = 50  # in ms
+
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
@@ -27,17 +29,16 @@ def recognize_audio_segment(audio_segment, language="en-US", show_all=True):
             return None
 
 
-class SpeechSegment(object):
+class SpeechSegment(NodeMixin):
 
     def __init__(self, audio_segment, speech_start=0):
+        super(SpeechSegment, self).__init__()
         self.audio_segment = audio_segment
         self.speech_start = speech_start
-
-        self.children = []
         self._splits = {}
         self._recognized = None
 
-    def do_split(self, silence_min_len=DEFAULT_SILENCE_MIN_LEN,
+    def split(self, silence_min_len=DEFAULT_SILENCE_MIN_LEN,
               silence_max_db=DEFAULT_SILENCE_MAX_DB,
               silence_margin=DEFAULT_SILENCE_MARGIN):
         if (silence_min_len, silence_max_db) in self._splits:
@@ -52,7 +53,7 @@ class SpeechSegment(object):
         """
         Based on see pydub.silence.detect_nonsilent
         """
-        assert 2*silence_margin < silence_min_len, 'Margin (%s) is too big for silence_min_len (%s)' % (
+        assert 2 * silence_margin < silence_min_len, 'Margin (%s) is too big for silence_min_len (%s)' % (
             silence_margin, silence_min_len)
 
         silent_ranges = detect_silence(self.audio_segment, silence_min_len, silence_max_db)
@@ -96,7 +97,7 @@ class SpeechSegment(object):
             seg = self.audio_segment
         play(seg)
 
-    def play_split(self, skip_silence=True):
+    def play_children(self, skip_silence=True):
         for child in self.children:
             child.play(skip_silence)
 
@@ -114,7 +115,6 @@ class SpeechSegment(object):
     #         return -1
     #     else:
     #         return max(a['confidence'] for a in alternatives)
-
 
     # @property
     # def language(self):
