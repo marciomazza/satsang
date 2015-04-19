@@ -43,11 +43,10 @@ class SpeechSegment(object):
         if (silence_min_len, silence_max_db) in self._splits:
             return
         split_ranges = self.split_ranges(silence_min_len, silence_max_db, silence_margin)
-        segments = [
+        self.children = [
             SpeechSegment(self.audio_segment[start:end], speech_start - start)
             for (start, speech_start, end) in split_ranges]
-        self.children = segments
-        self._splits[(silence_min_len, silence_max_db, silence_margin)] = segments
+        self._splits[(silence_min_len, silence_max_db, silence_margin)] = self.children
 
     def split_ranges(self, silence_min_len, silence_max_db, silence_margin):
         """
