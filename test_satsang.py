@@ -13,6 +13,9 @@ silent_ranges_and_splits = [
     [[[0, 30], [70, 100]],
      [(0, 30 - 2, 100)]],
 
+    [[[0, 40]],
+     [(0, 40 - 2, 100)]],
+
     [[[0, 100]], []],
 
     [[], [(0, 0, 100)]],
@@ -32,7 +35,7 @@ def assert_equal_sequences(a1, a2):
 
 
 @pytest.mark.parametrize('silent_ranges, splits', silent_ranges_and_splits)
-def test_split_ranges(silent_ranges, splits):
+def test_split(silent_ranges, splits):
     with patch('satsang.detect_silence') as detect_silence:
         detect_silence.return_value = silent_ranges
 
