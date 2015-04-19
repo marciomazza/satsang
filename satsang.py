@@ -14,6 +14,9 @@ DEFAULT_SILENCE_MIN_LEN = 300  # in ms
 DEFAULT_SILENCE_MAX_DB = -50  # in dB
 DEFAULT_SILENCE_MARGIN = 50  # in ms
 
+CONFIDENCE_MIN = 0.40
+CONFIDENCE_MAX = 0.85
+
 
 class SpeechSegment(NodeMixin):
 
@@ -82,6 +85,7 @@ class SpeechSegment(NodeMixin):
             seg = self.audio_segment[self.speech_start:]
         else:
             seg = self.audio_segment
+        print '-' * 40, self.language(), self.confidence
         play(seg)
 
     def play_children(self, skip_silence=True):
@@ -98,19 +102,22 @@ class SpeechSegment(NodeMixin):
             }
         return self._recognized
 
+    @property
     def confidence(self):
 
         def max_confidence(alternatives):
             if not alternatives:
                 return -1
             else:
-                return max(a['confidence'] for a in alternatives)
+                return round(max(a['confidence'] for a in alternatives), 2)
 
         return {lang: max_confidence(alternatives) for lang, alternatives in self.recognized.iteritems()}
 
-    # @property
-    # def language(self):
-    #     return self.recognized[en]
+    def language(self, confidence_min=CONFIDENCE_MIN, confidence_max=CONFIDENCE_MAX):
+        (min_value, _), (max_value, lang) = sorted(
+            (v, l) for l, v in self.confidence.items())
+        if min_value < confidence_min and max_value > confidence_max:
+            return lang
 
     def _data_to_store(self):
         return dict(
