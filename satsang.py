@@ -145,7 +145,16 @@ class SpeechSegment(NodeMixin):
             self.split(silence_max_db=db)
             if self.children:
                 message('    >>> split done in %d dB' % db)
-                break
+                return True
+        return False
+
+    def exhaust(self):
+        if self.language():
+            return  # done
+        if self.children or self.seek_split():
+            for child in self.children:
+                child.exhaust()
+
 
     # SAVE AND RESTORE ##########################
 
@@ -182,6 +191,11 @@ class SpeechSegment(NodeMixin):
         data = db.all()[0]['root']
         self._restore_from_data(data)
 
+    def tree_view(self, indent=0):
+        print '  '*indent, self.language(), self.silence_max_db_used, self.confidence, self.audio_segment.duration_seconds
+        for child in self.children:
+            child.tree_view(indent + 1)
+
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
@@ -212,3 +226,6 @@ def speech_from_wav(filename, split=True):
 
 def message(msg):
     print msg
+
+
+r = speech_from_wav('trecho.wav')
