@@ -1,4 +1,5 @@
 import os.path
+import sys
 from tempfile import NamedTemporaryFile
 
 from leaves import NodeMixin
@@ -9,22 +10,26 @@ from speech_recognition import WavFile, Recognizer
 from tinydb import TinyDB
 
 
+THRESHOLD_LEN = range(300, 100, -10)  # in ms
+THRESHOLD_DB = range(-50, -30)  # in dB
+SILENCE_MARGIN = 50  # in ms
+CONFIDENCE_LOW, CONFIDENCE_HIGH = 0.40, 0.85
+
+assert SILENCE_MARGIN*2 < min(THRESHOLD_LEN)
+
 en, pt = 'en-US', 'pt-BR'
-DEFAULT_SILENCE_MIN_LEN = 300  # in ms
-DEFAULT_SILENCE_MAX_DB = -50  # in dB
-DEFAULT_SILENCE_MARGIN = 50  # in ms
-
-SILENCE_SEEK_COUNT = 30
-
-CONFIDENCE_MIN = 0.40
-CONFIDENCE_MAX = 0.85
-
 speech_segments = []
 
 
 def register_segment(speech_segment):
     speech_segments.append(speech_segment)
     return len(speech_segments) - 1
+
+
+def silence_thresholds():
+    for length in THRESHOLD_LEN:
+        for db in THRESHOLD_DB:
+            yield length, db
 
 
 class SpeechSegment(NodeMixin):
@@ -40,9 +45,9 @@ class SpeechSegment(NodeMixin):
     #### SLIT ####
 
     def split(self,
-              silence_min_len=DEFAULT_SILENCE_MIN_LEN,
-              silence_max_db=DEFAULT_SILENCE_MAX_DB,
-              silence_margin=DEFAULT_SILENCE_MARGIN):
+              silence_min_len=THRESHOLD_LEN[0],
+              silence_max_db=THRESHOLD_DB[0],
+              silence_margin=SILENCE_MARGIN):
 
         self.silence_max_db_used = silence_max_db
         self.children = []
@@ -59,9 +64,9 @@ class SpeechSegment(NodeMixin):
                 for (start, speech_start, end) in split_ranges]
 
     def split_ranges(self,
-                     silence_min_len=DEFAULT_SILENCE_MIN_LEN,
-                     silence_max_db=DEFAULT_SILENCE_MAX_DB,
-                     silence_margin=DEFAULT_SILENCE_MARGIN):
+                     silence_min_len=THRESHOLD_LEN[0],
+                     silence_max_db=THRESHOLD_DB[0],
+                     silence_margin=SILENCE_MARGIN):
         """
         Based on see pydub.silence.detect_nonsilent
         """
@@ -107,22 +112,23 @@ class SpeechSegment(NodeMixin):
 
         return ranges
 
-    def seek_split(self, initial_silence_max_db=DEFAULT_SILENCE_MAX_DB):
+    def seek_split(self):
         if self.children:
-            return
-        message("Seeking split dB for segment...")
-        for db in range(initial_silence_max_db, initial_silence_max_db + SILENCE_SEEK_COUNT):
-            message("  Trying %d dB" % db)
-            self.split(silence_max_db=db)
+            return True
+        message("Seeking split for segment...")
+        for length, db in silence_thresholds():
+            self.split(length, db)
             if self.children:
-                message('    >>> split done in %d dB' % db)
+                message('\n    >>> Split done with length, dB: [%s,  %s]' % (length, db))
                 return True
+            else:
+                message_point()
         return False
 
     def exhaust(self):
         if self.language():
             return  # done
-        if self.children or self.seek_split():
+        if self.seek_split():
             for child in self.children:
                 child.exhaust()
 
@@ -156,10 +162,10 @@ class SpeechSegment(NodeMixin):
 
         return {lang: max_confidence(alternatives) for lang, alternatives in self.recognized.iteritems()}
 
-    def language(self, confidence_min=CONFIDENCE_MIN, confidence_max=CONFIDENCE_MAX):
+    def language(self):
         (min_value, _), (max_value, lang) = sorted(
             (v, l) for l, v in self.confidence.items())
-        if min_value < confidence_min and max_value > confidence_max:
+        if min_value < CONFIDENCE_LOW and max_value > CONFIDENCE_HIGH:
             return lang
 
     #### GENERAL PROPERTIES ################################
@@ -267,6 +273,10 @@ def speech_from_wav(filename, split=True):
 
 def message(msg):
     print msg
+
+
+def message_point():
+    sys.stdout.write('.')
 
 
 def play_id(id):
