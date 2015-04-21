@@ -19,20 +19,28 @@ SILENCE_SEEK_COUNT = 30
 CONFIDENCE_MIN = 0.40
 CONFIDENCE_MAX = 0.85
 
+speech_segments = []
+
+
+def register_segment(speech_segment):
+    speech_segments.append(speech_segment)
+    return len(speech_segments) - 1
+
 
 class SpeechSegment(NodeMixin):
 
     def __init__(self, audio_segment, speech_start=0):
         super(SpeechSegment, self).__init__()
+        self.id = register_segment(self)
         self.audio_segment = audio_segment
         self.speech_start = speech_start
         self._recognized = None
         self.silence_max_db_used = None
 
     def split(self,
-            silence_min_len=DEFAULT_SILENCE_MIN_LEN,
-            silence_max_db=DEFAULT_SILENCE_MAX_DB,
-            silence_margin=DEFAULT_SILENCE_MARGIN):
+              silence_min_len=DEFAULT_SILENCE_MIN_LEN,
+              silence_max_db=DEFAULT_SILENCE_MAX_DB,
+              silence_margin=DEFAULT_SILENCE_MARGIN):
 
         self.silence_max_db_used = silence_max_db
         self.children = []
@@ -49,9 +57,9 @@ class SpeechSegment(NodeMixin):
                 for (start, speech_start, end) in split_ranges]
 
     def split_ranges(self,
-            silence_min_len=DEFAULT_SILENCE_MIN_LEN,
-            silence_max_db=DEFAULT_SILENCE_MAX_DB,
-            silence_margin=DEFAULT_SILENCE_MARGIN):
+                     silence_min_len=DEFAULT_SILENCE_MIN_LEN,
+                     silence_max_db=DEFAULT_SILENCE_MAX_DB,
+                     silence_margin=DEFAULT_SILENCE_MARGIN):
         """
         Based on see pydub.silence.detect_nonsilent
         """
@@ -98,11 +106,12 @@ class SpeechSegment(NodeMixin):
         return ranges
 
     def play(self, skip_silence=True):
+        self.tree_view()
         if skip_silence:
             seg = self.audio_segment[self.speech_start:]
         else:
             seg = self.audio_segment
-        print '-' * 40, self.language(), self.confidence
+        print '-' * 40, self.language(), self.confidence, '[%s]' % self.transcription
         play(seg)
 
     def play_children(self, skip_silence=True):
@@ -119,6 +128,13 @@ class SpeechSegment(NodeMixin):
             }
         return self._recognized
 
+    def _best_alternative(self, alternatives):
+        max_confidence, best = -1, None
+        for alt in alternatives:
+            if alt['confidence'] > max_confidence:
+                max_confidence, best = alt['confidence'], alt
+        return best
+
     @property
     def confidence(self):
 
@@ -126,7 +142,8 @@ class SpeechSegment(NodeMixin):
             if not alternatives:
                 return -1
             else:
-                return round(max(a['confidence'] for a in alternatives), 2)
+                best = self._best_alternative(alternatives)
+                return round(best['confidence'], 2)
 
         return {lang: max_confidence(alternatives) for lang, alternatives in self.recognized.iteritems()}
 
@@ -135,6 +152,15 @@ class SpeechSegment(NodeMixin):
             (v, l) for l, v in self.confidence.items())
         if min_value < confidence_min and max_value > confidence_max:
             return lang
+
+    @property
+    def transcription(self):
+        lang = self.language()
+        if lang:
+            best = self._best_alternative(self.recognized[lang])
+            return best['text']
+        else:
+            return '???'
 
     def seek_split(self, initial_silence_max_db=DEFAULT_SILENCE_MAX_DB):
         if self.children:
@@ -154,7 +180,6 @@ class SpeechSegment(NodeMixin):
         if self.children or self.seek_split():
             for child in self.children:
                 child.exhaust()
-
 
     # SAVE AND RESTORE ##########################
 
@@ -192,10 +217,17 @@ class SpeechSegment(NodeMixin):
         self._restore_from_data(data)
 
     def tree_view(self, indent=0):
-        print '  '*indent, self.language(), self.silence_max_db_used, self.confidence, self.audio_segment.duration_seconds
+        lang = {en: 'en', pt: 'pt', None: '??'}[self.language()]
+        conf = self.confidence[en], self.confidence[pt]
+        print self.id, '  ' * indent, lang, round(self.silence_dB), \
+            self.silence_max_db_used or '---', conf, round(self.audio_segment.duration_seconds), \
+            '[%s]' % self.transcription
         for child in self.children:
             child.tree_view(indent + 1)
 
+    @property
+    def silence_dB(self):
+        return(self.audio_segment[:self.speech_start].dBFS)
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
@@ -227,5 +259,8 @@ def speech_from_wav(filename, split=True):
 def message(msg):
     print msg
 
+
+def play_id(id):
+    speech_segments[id].play()
 
 r = speech_from_wav('trecho.wav')
