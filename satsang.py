@@ -37,6 +37,8 @@ class SpeechSegment(NodeMixin):
         self._recognized = None
         self.silence_max_db_used = None
 
+    #### SLIT ####
+
     def split(self,
               silence_min_len=DEFAULT_SILENCE_MIN_LEN,
               silence_max_db=DEFAULT_SILENCE_MAX_DB,
@@ -105,19 +107,26 @@ class SpeechSegment(NodeMixin):
 
         return ranges
 
-    def play(self, skip_silence=True):
-        self.tree_view()
-        if skip_silence:
-            seg = self.audio_segment[self.speech_start:]
-        else:
-            seg = self.audio_segment
-        print '-' * 40, self.language(), self.confidence, '[%s]' % self.transcription
-        play(seg)
+    def seek_split(self, initial_silence_max_db=DEFAULT_SILENCE_MAX_DB):
+        if self.children:
+            return
+        message("Seeking split dB for segment...")
+        for db in range(initial_silence_max_db, initial_silence_max_db + SILENCE_SEEK_COUNT):
+            message("  Trying %d dB" % db)
+            self.split(silence_max_db=db)
+            if self.children:
+                message('    >>> split done in %d dB' % db)
+                return True
+        return False
 
-    def play_children(self, skip_silence=True):
-        for child in self.children:
-            print '\n' + '~' * 40, child.audio_segment.duration_seconds
-            child.play(skip_silence)
+    def exhaust(self):
+        if self.language():
+            return  # done
+        if self.children or self.seek_split():
+            for child in self.children:
+                child.exhaust()
+
+    #### RECOGNITION ################################
 
     @property
     def recognized(self):
@@ -153,6 +162,12 @@ class SpeechSegment(NodeMixin):
         if min_value < confidence_min and max_value > confidence_max:
             return lang
 
+    #### GENERAL PROPERTIES ################################
+
+    @property
+    def silence_dB(self):
+        return(self.audio_segment[:self.speech_start].dBFS)
+
     @property
     def transcription(self):
         lang = self.language()
@@ -162,26 +177,7 @@ class SpeechSegment(NodeMixin):
         else:
             return '???'
 
-    def seek_split(self, initial_silence_max_db=DEFAULT_SILENCE_MAX_DB):
-        if self.children:
-            return
-        message("Seeking split dB for segment...")
-        for db in range(initial_silence_max_db, initial_silence_max_db + SILENCE_SEEK_COUNT):
-            message("  Trying %d dB" % db)
-            self.split(silence_max_db=db)
-            if self.children:
-                message('    >>> split done in %d dB' % db)
-                return True
-        return False
-
-    def exhaust(self):
-        if self.language():
-            return  # done
-        if self.children or self.seek_split():
-            for child in self.children:
-                child.exhaust()
-
-    # SAVE AND RESTORE ##########################
+    # SAVE AND RESTORE ################################
 
     def _data_to_store(self):
         return dict(
@@ -216,6 +212,22 @@ class SpeechSegment(NodeMixin):
         data = db.all()[0]['root']
         self._restore_from_data(data)
 
+    #### FEEDBACK ################################
+
+    def play(self, skip_silence=True):
+        self.tree_view()
+        if skip_silence:
+            seg = self.audio_segment[self.speech_start:]
+        else:
+            seg = self.audio_segment
+        print '-' * 40, self.language(), self.confidence, '[%s]' % self.transcription
+        play(seg)
+
+    def play_children(self, skip_silence=True):
+        for child in self.children:
+            print '\n' + '~' * 40, child.audio_segment.duration_seconds
+            child.play(skip_silence)
+
     def tree_view(self, indent=0):
         lang = {en: 'en', pt: 'pt', None: '??'}[self.language()]
         conf = self.confidence[en], self.confidence[pt]
@@ -225,9 +237,6 @@ class SpeechSegment(NodeMixin):
         for child in self.children:
             child.tree_view(indent + 1)
 
-    @property
-    def silence_dB(self):
-        return(self.audio_segment[:self.speech_start].dBFS)
 
 def recognize_wav(filename, language="en-US", show_all=True):
     recognizer = Recognizer(language=language)
