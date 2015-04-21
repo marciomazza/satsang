@@ -258,7 +258,10 @@ def recognize_wav(filename, language="en-US", show_all=True):
     return recognizer.recognize(audio_data, show_all)
 
 
-def recognize_audio_segment(audio_segment, language="en-US", show_all=True):
+def recognize_audio_segment(audio_segment, language="en-US",
+                            show_all=True, min_duration_seconds=10):
+    if audio_segment.duration_seconds > min_duration_seconds:
+        return None
     with NamedTemporaryFile("w+b", suffix=".wav") as f:
         audio_segment.export(f.name, "wav")
         try:
@@ -284,6 +287,7 @@ def message(msg):
 
 def message_point():
     sys.stdout.write('.')
+    sys.stdout.flush()
 
 
 def play_id(id):
