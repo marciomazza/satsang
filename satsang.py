@@ -15,7 +15,7 @@ THRESHOLD_DB = range(-50, -30)  # in dB
 SILENCE_MARGIN = 50  # in ms
 CONFIDENCE_LOW, CONFIDENCE_HIGH = 0.40, 0.85
 
-assert SILENCE_MARGIN*2 < min(THRESHOLD_LEN)
+assert SILENCE_MARGIN * 2 < min(THRESHOLD_LEN)
 
 en, pt = 'en-US', 'pt-BR'
 speech_segments = []
@@ -234,14 +234,21 @@ class SpeechSegment(NodeMixin):
             print '\n' + '~' * 40, child.audio_segment.duration_seconds
             child.play(skip_silence)
 
-    def tree_view(self, indent=0):
+    def tree_view(self, feedback_function=None, indent=0):
         lang = {en: 'en', pt: 'pt', None: '??'}[self.language()]
         conf = self.confidence[en], self.confidence[pt]
-        print self.id, '  ' * indent, lang, round(self.silence_dB), \
-            self.silence_max_db_used or '---', conf, round(self.audio_segment.duration_seconds), \
-            '[%s]' % self.transcription
+        msg = ' '.join(
+            map(unicode, [lang,
+                          round(self.silence_dB),
+                          self.silence_max_db_used or '---',
+                          conf,
+                          round(self.audio_segment.duration_seconds),
+                          '[%s]' % self.transcription]))
+        if feedback_function:
+            msg = '[[%s]] ' % feedback_function(self) + msg
+        print self.id, '  ' * indent, msg
         for child in self.children:
-            child.tree_view(indent + 1)
+            child.tree_view(feedback_function, indent + 1)
 
 
 def recognize_wav(filename, language="en-US", show_all=True):
